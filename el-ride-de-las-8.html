@@ -1,0 +1,1441 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>El ride de las 8 — Monclova a Saltillo</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;background:#0a0c14;overflow:hidden;}
+  body{
+    font-family:Georgia,"Iowan Old Style",serif;
+    color:#e8e2d4;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:12px;
+    -webkit-user-select:none;
+    user-select:none;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .game{
+    width:100%;
+    max-width:520px;
+    aspect-ratio:9/16;
+    max-height:calc(100vh - 24px);
+    position:relative;
+    border-radius:6px;
+    overflow:hidden;
+    box-shadow:0 20px 60px rgba(0,0,0,.6);
+    background:#0a0c14;
+  }
+  canvas.scene{
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+    display:block;
+  }
+  .hud{
+    position:absolute;
+    top:0;left:0;right:0;
+    padding:12px 14px;
+    background:linear-gradient(to bottom, rgba(0,0,0,.75), rgba(0,0,0,0));
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:10px;
+    z-index:5;
+    pointer-events:none;
+  }
+  .hud-block{
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    font-size:10px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    line-height:1.5;
+  }
+  .hud-block .label{color:#a49e8c;}
+  .hud-block .value{color:#e8e2d4;font-size:14px;}
+  .hud-right{text-align:right;}
+
+  .progress-track{
+    position:absolute;
+    top:64px;left:14px;right:14px;
+    height:3px;
+    background:rgba(255,255,255,.1);
+    border-radius:2px;
+    z-index:5;
+    overflow:hidden;
+  }
+  .progress-fill{
+    height:100%;
+    width:0;
+    background:#c9a227;
+    transition:width .2s linear;
+  }
+
+  .speedo{
+    position:absolute;
+    bottom:180px;
+    left:50%;
+    transform:translateX(-50%);
+    z-index:5;
+    text-align:center;
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    pointer-events:none;
+  }
+  .speedo .kmh{
+    font-size:44px;
+    color:#e8e2d4;
+    font-weight:300;
+    line-height:1;
+    text-shadow:0 2px 8px rgba(0,0,0,.9);
+  }
+  .speedo .unit{
+    font-size:10px;
+    color:#a49e8c;
+    letter-spacing:.15em;
+    text-transform:uppercase;
+    margin-top:2px;
+  }
+  .speedo.warn .kmh{color:#e8b23d;}
+  .speedo.danger .kmh{color:#e24b4a;animation:speedpulse .3s ease-in-out infinite;}
+  @keyframes speedpulse{0%,100%{opacity:1;}50%{opacity:.55;}}
+  .hud-block.countdown .value{color:#e8e2d4;}
+  .hud-block.countdown.warn .value{color:#e8b23d;}
+  .hud-block.countdown.danger .value{color:#e24b4a;animation:speedpulse .5s ease-in-out infinite;}
+
+  .tap-button{
+    position:absolute;
+    bottom:28px;
+    left:50%;
+    transform:translateX(-50%);
+    width:130px;
+    height:130px;
+    border-radius:50%;
+    border:2px solid rgba(232,178,61,.7);
+    background:radial-gradient(circle at center, rgba(232,178,61,.25), rgba(232,178,61,.05));
+    color:#e8e2d4;
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    font-size:14px;
+    letter-spacing:.15em;
+    text-transform:uppercase;
+    cursor:pointer;
+    z-index:10;
+    transition:transform .06s ease, background .1s ease, border-color .2s ease;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .tap-button.pressed{
+    transform:translateX(-50%) scale(.92);
+    background:radial-gradient(circle at center, rgba(232,178,61,.55), rgba(232,178,61,.15));
+  }
+  .tap-button:focus-visible{outline:2px solid #c9a227;outline-offset:4px;}
+  .tap-button.urgent{
+    border-color:#e24b4a;
+    background:radial-gradient(circle at center, rgba(226,75,74,.35), rgba(226,75,74,.08));
+    animation:pulse-urgent .5s ease-in-out infinite;
+  }
+  @keyframes pulse-urgent{
+    0%,100%{box-shadow:0 0 0 0 rgba(226,75,74,.5);}
+    50%{box-shadow:0 0 0 14px rgba(226,75,74,0);}
+  }
+  .tap-button.disabled{
+    opacity:.35;
+    cursor:not-allowed;
+    border-color:rgba(255,255,255,.15);
+    background:transparent;
+  }
+
+  .event-card{
+    position:absolute;
+    bottom:180px;
+    left:14px;
+    right:14px;
+    padding:14px 16px;
+    background:rgba(10,12,20,.9);
+    border:1px solid rgba(232,178,61,.4);
+    border-radius:4px;
+    z-index:6;
+    font-size:14.5px;
+    line-height:1.55;
+    color:#e8e2d4;
+    opacity:0;
+    transform:translateY(6px);
+    transition:opacity .3s ease, transform .3s ease;
+    pointer-events:none;
+  }
+  .event-card.show{opacity:1;transform:translateY(0);}
+  .event-card .tag{
+    font-family:ui-monospace,monospace;
+    font-size:10px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:#c9a227;
+    margin-bottom:6px;
+  }
+  .event-card.danger{border-color:rgba(226,75,74,.6);}
+  .event-card.danger .tag{color:#e24b4a;}
+  .event-card .urgent-bar{
+    margin-top:10px;
+    height:4px;
+    background:rgba(255,255,255,.1);
+    border-radius:2px;
+    overflow:hidden;
+  }
+  .event-card .urgent-bar-fill{
+    height:100%;
+    width:0%;
+    background:#e24b4a;
+    transition:width .1s ease;
+  }
+
+  .passengers{
+    position:absolute;
+    top:14px;
+    right:14px;
+    z-index:5;
+    display:flex;
+    flex-direction:column;
+    align-items:flex-end;
+    gap:2px;
+    pointer-events:none;
+  }
+  .pax-dots{
+    display:flex;
+    gap:3px;
+    margin-top:4px;
+  }
+  .pax-dot{
+    width:8px;
+    height:8px;
+    border-radius:50%;
+    background:rgba(255,255,255,.15);
+    transition:background .3s ease;
+  }
+  .pax-dot.on{background:#c9a227;}
+
+  .overlay{
+    position:absolute;
+    inset:0;
+    background:rgba(5,7,12,.94);
+    z-index:20;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex-direction:column;
+    padding:32px 24px;
+    text-align:center;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .5s ease;
+  }
+  .overlay.show{opacity:1;pointer-events:auto;}
+  .overlay h1{
+    font-family:Georgia,serif;
+    font-weight:normal;
+    font-size:26px;
+    letter-spacing:.02em;
+    margin-bottom:8px;
+    color:#e8e2d4;
+  }
+  .overlay .sub{
+    font-family:ui-monospace,monospace;
+    font-size:11px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:#c9a227;
+    margin-bottom:24px;
+  }
+  .overlay .body{
+    font-size:15.5px;
+    line-height:1.7;
+    color:#c9c2b0;
+    max-width:420px;
+    margin-bottom:22px;
+  }
+  .overlay .stats{
+    font-family:ui-monospace,monospace;
+    font-size:12px;
+    color:#a49e8c;
+    line-height:2;
+    margin-bottom:26px;
+  }
+  .overlay .stats b{color:#e8e2d4;font-weight:normal;}
+  .overlay button{
+    font-family:ui-monospace,monospace;
+    font-size:12px;
+    letter-spacing:.15em;
+    text-transform:uppercase;
+    background:#c9a227;
+    color:#26200f;
+    border:none;
+    border-radius:2px;
+    padding:12px 28px;
+    cursor:pointer;
+  }
+  .credit{
+    position:absolute;
+    bottom:6px;
+    left:0;right:0;
+    text-align:center;
+    font-family:ui-monospace,monospace;
+    font-size:9px;
+    letter-spacing:.05em;
+    color:rgba(255,255,255,.25);
+    z-index:5;
+    pointer-events:none;
+  }
+
+  .thought{
+    position:absolute;
+    top:96px;
+    left:16px;
+    right:34%;
+    font-family:Georgia,"Iowan Old Style",serif;
+    font-style:italic;
+    font-size:15px;
+    line-height:1.4;
+    color:rgba(232,226,212,.9);
+    opacity:0;
+    transform:translateY(-4px);
+    transition:opacity 1.1s ease, transform 1.1s ease;
+    z-index:4;
+    pointer-events:none;
+    text-shadow:0 1px 4px rgba(0,0,0,.9);
+  }
+  .thought.show{opacity:1;transform:translateY(0);}
+
+  .mute{
+    position:absolute;
+    bottom:14px;
+    right:14px;
+    width:32px;
+    height:32px;
+    border-radius:50%;
+    background:rgba(10,12,20,.6);
+    border:1px solid rgba(255,255,255,.15);
+    color:#c9c2b0;
+    font-family:ui-monospace,monospace;
+    font-size:12px;
+    cursor:pointer;
+    z-index:11;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:0;
+  }
+  .mute:hover{border-color:rgba(232,178,61,.6);}
+  .mute svg{width:14px;height:14px;fill:currentColor;}
+</style>
+</head>
+<body>
+<div class="game" id="game">
+  <canvas class="scene" id="scene"></canvas>
+
+  <div class="hud">
+    <div class="hud-block">
+      <div class="label">distancia</div>
+      <div class="value"><span id="km">0</span> / 195 km</div>
+    </div>
+    <div class="hud-block hud-right countdown" id="countdown-block">
+      <div class="label">tiempo restante</div>
+      <div class="value" id="time">03:30</div>
+    </div>
+  </div>
+
+  <div class="progress-track">
+    <div class="progress-fill" id="progress"></div>
+  </div>
+
+  <div class="passengers">
+    <div class="hud-block">
+      <div class="label">a bordo</div>
+    </div>
+    <div class="pax-dots" id="pax"></div>
+  </div>
+
+  <div class="speedo">
+    <div class="kmh" id="speed">0</div>
+    <div class="unit">km/h</div>
+  </div>
+
+  <div class="event-card" id="event"></div>
+
+  <div class="thought" id="thought"></div>
+
+  <button class="tap-button disabled" id="tap" aria-label="Acelerar">acelera</button>
+
+  <button class="mute" id="mute" aria-label="Silenciar audio">
+    <svg viewBox="0 0 24 24" id="mute-icon"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+  </button>
+
+  <div class="credit">basado en la crónica de Carlos Mirón</div>
+
+  <div class="overlay show" id="overlay">
+    <div class="sub">plaza de los bomberos · monclova · 20:10</div>
+    <h1>El ride de las 8</h1>
+    <div class="body">
+      Reservaste el último lugar de la noche desde un grupo de Facebook. La unidad marca 13 al costado. Adentro ya van dos pasajeros.
+      <br><br>
+      <b style="color:#e8e2d4;">Tapea rápido</b> para acelerar. Tienes <b style="color:#e8e2d4;">3:30</b> para llegar a Saltillo. Pero cuidado: pasar de <b style="color:#e24b4a;">150 km/h</b> es accidente.
+    </div>
+    <button id="start">Subir a la unidad</button>
+  </div>
+</div>
+
+<script>
+(function(){
+
+  // ---- audio: procedural, no samples ----
+  var audio = {
+    ctx:null, master:null,
+    drone:null, droneGain:null, droneFilter:null,
+    urgentOsc:null, urgentGain:null,
+    sirenTimer:null,
+    muted:false,
+    ready:false,
+
+    init: function(){
+      if(this.ready) return;
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if(!AC) return;
+      this.ctx = new AC();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = 0.35;
+      this.master.connect(this.ctx.destination);
+      this._startDrone();
+      this.ready = true;
+    },
+
+    _startDrone: function(){
+      var ctx = this.ctx;
+      // deep sawtooth through a lowpass — desert ambient
+      var osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.value = 55;
+
+      // slow LFO on frequency for organic drift
+      var lfo = ctx.createOscillator();
+      lfo.frequency.value = 0.12;
+      var lfoGain = ctx.createGain();
+      lfoGain.gain.value = 1.8;
+      lfo.connect(lfoGain);
+      lfoGain.connect(osc.frequency);
+
+      var filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 200;
+      filter.Q.value = 3;
+
+      var gain = ctx.createGain();
+      gain.gain.value = 0.22;
+
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.master);
+
+      osc.start();
+      lfo.start();
+
+      this.drone = osc;
+      this.droneGain = gain;
+      this.droneFilter = filter;
+    },
+
+    tick: function(velocity){
+      if(!this.ready || this.muted) return;
+      var now = this.ctx.currentTime;
+      var osc = this.ctx.createOscillator();
+      osc.type = 'triangle';
+      // higher speed → brighter tick
+      var pitch = 220 + Math.min(velocity, 150) * 1.8;
+      osc.frequency.setValueAtTime(pitch * 1.2, now);
+      osc.frequency.exponentialRampToValueAtTime(pitch, now + 0.03);
+      var gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0.14, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+      osc.connect(gain);
+      gain.connect(this.master);
+      osc.start(now);
+      osc.stop(now + 0.1);
+    },
+
+    beat: function(){
+      if(!this.ready || this.muted) return;
+      var now = this.ctx.currentTime;
+      // kick drum: sine sweep down
+      var osc = this.ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(90, now);
+      osc.frequency.exponentialRampToValueAtTime(35, now + 0.12);
+      var gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0.32, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+      osc.connect(gain);
+      gain.connect(this.master);
+      osc.start(now);
+      osc.stop(now + 0.22);
+    },
+
+    urgentStart: function(){
+      if(!this.ready) return;
+      var now = this.ctx.currentTime;
+      var osc = this.ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.value = 132; // dissonant tritone-ish against 55hz drone
+      var gain = this.ctx.createGain();
+      gain.gain.value = 0;
+      gain.gain.linearRampToValueAtTime(0.09, now + 0.5);
+      var filter = this.ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.value = 380;
+      filter.Q.value = 6;
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.master);
+      osc.start(now);
+      this.urgentOsc = osc;
+      this.urgentGain = gain;
+    },
+
+    urgentEnd: function(){
+      if(this.urgentGain && this.urgentOsc){
+        var now = this.ctx.currentTime;
+        this.urgentGain.gain.linearRampToValueAtTime(0, now + 0.4);
+        this.urgentOsc.stop(now + 0.5);
+        this.urgentOsc = null;
+        this.urgentGain = null;
+      }
+    },
+
+    sirenStart: function(){
+      if(!this.ready) return;
+      var self = this;
+      // slow pulsing tone, sits low in the mix
+      this.sirenTimer = setInterval(function(){
+        if(!self.ready || self.muted) return;
+        var now = self.ctx.currentTime;
+        var osc = self.ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(320, now);
+        osc.frequency.linearRampToValueAtTime(280, now + 0.4);
+        var gain = self.ctx.createGain();
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(0.06, now + 0.1);
+        gain.gain.linearRampToValueAtTime(0, now + 0.6);
+        osc.connect(gain);
+        gain.connect(self.master);
+        osc.start(now);
+        osc.stop(now + 0.7);
+      }, 900);
+    },
+
+    sirenEnd: function(){
+      if(this.sirenTimer){
+        clearInterval(this.sirenTimer);
+        this.sirenTimer = null;
+      }
+    },
+
+    crash: function(){
+      if(!this.ready || this.muted) return;
+      var now = this.ctx.currentTime;
+      // white noise burst
+      var buffer = this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate * 1.2), this.ctx.sampleRate);
+      var data = buffer.getChannelData(0);
+      for(var i=0; i<data.length; i++){
+        data[i] = (Math.random()*2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.35));
+      }
+      var noise = this.ctx.createBufferSource();
+      noise.buffer = buffer;
+      var noiseGain = this.ctx.createGain();
+      noiseGain.gain.value = 0.55;
+      noise.connect(noiseGain);
+      noiseGain.connect(this.master);
+      noise.start(now);
+
+      // low boom
+      var boom = this.ctx.createOscillator();
+      boom.type = 'sine';
+      boom.frequency.setValueAtTime(65, now);
+      boom.frequency.exponentialRampToValueAtTime(22, now + 0.9);
+      var boomGain = this.ctx.createGain();
+      boomGain.gain.setValueAtTime(0.7, now);
+      boomGain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+      boom.connect(boomGain);
+      boomGain.connect(this.master);
+      boom.start(now);
+      boom.stop(now + 1.3);
+
+      // fade everything out
+      this.master.gain.setValueAtTime(this.master.gain.value, now + 1);
+      this.master.gain.exponentialRampToValueAtTime(0.001, now + 3);
+    },
+
+    setProgress: function(p){
+      if(!this.ready) return;
+      // subtle drone timbre shift after crossing the mountains
+      if(this.droneFilter){
+        var target = p < 0.5 ? 200 : 200 + (p - 0.5) * 380;
+        this.droneFilter.frequency.setTargetAtTime(target, this.ctx.currentTime, 0.5);
+      }
+    },
+
+    setStopped: function(stopped){
+      if(!this.ready) return;
+      // duck the drone slightly when pulled over — silence feels closer
+      if(this.droneGain){
+        var target = stopped ? 0.12 : 0.22;
+        this.droneGain.gain.setTargetAtTime(target, this.ctx.currentTime, 0.3);
+      }
+    },
+
+    toggleMute: function(){
+      this.muted = !this.muted;
+      if(!this.ready) return;
+      var target = this.muted ? 0 : 0.35;
+      this.master.gain.setTargetAtTime(target, this.ctx.currentTime, 0.1);
+      return this.muted;
+    }
+  };
+
+  // ---- floating thoughts ----
+  var THOUGHTS = [
+    'cuánta gente cabe en un carro',
+    'hace calor aquí atrás',
+    'ojalá el chofer haya dormido',
+    'el olor a perfume y a tierra',
+    'la luna llena sobre el desierto',
+    'todavía falta',
+    'otra vez la pastilla de menta',
+    'los amortiguadores se quejan',
+    'las nubes iluminadas por rayos a lo lejos',
+    'quién carga los paquetes',
+    'me llamó mi mamá y no le contesté',
+    'la app de rides en Monclova va bien muerta',
+    'ya casi llegamos, se ve el cerro',
+    'nadie está asegurado en este viaje'
+  ];
+
+  var thoughtState = { timer:null, showing:false };
+
+  function showThought(text){
+    if(thoughtState.showing) return;
+    var el = document.getElementById('thought');
+    el.textContent = text;
+    el.classList.add('show');
+    thoughtState.showing = true;
+    setTimeout(function(){
+      el.classList.remove('show');
+      setTimeout(function(){ thoughtState.showing = false; }, 1200);
+    }, 4200);
+  }
+
+  function showRandomThought(){
+    if(!state.running || state.ended || state.activeEvent) return;
+    var t = THOUGHTS[Math.floor(Math.random() * THOUGHTS.length)];
+    showThought(t);
+  }
+
+  function scheduleThoughts(){
+    if(thoughtState.timer) clearTimeout(thoughtState.timer);
+    var next = 12000 + Math.random() * 14000;
+    thoughtState.timer = setTimeout(function(){
+      showRandomThought();
+      scheduleThoughts();
+    }, next);
+  }
+
+  function stopThoughts(){
+    if(thoughtState.timer){
+      clearTimeout(thoughtState.timer);
+      thoughtState.timer = null;
+    }
+  }
+
+  var canvas = document.getElementById('scene');
+  var ctx = canvas.getContext('2d');
+  var W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+  function resize(){
+    var rect = canvas.getBoundingClientRect();
+    W = rect.width;
+    H = rect.height;
+    canvas.width = W * DPR;
+    canvas.height = H * DPR;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  window.addEventListener('resize', resize);
+
+  var TIME_LIMIT = 210; // 3:30 countdown
+  var CRASH_SPEED = 150;
+
+  var state = {
+    running:false,
+    ended:false,
+    crashed:false,
+    outOfTime:false,
+    km:0,
+    totalKm:195,
+    speed:0,
+    speedInternal:0,
+    elapsed:0,
+    remaining:TIME_LIMIT,
+    tapCount:0,
+    passengers:3,
+    events:[],
+    activeEvent:null,
+    stopped:false,
+    urgent:false,
+    tookRisk:false,
+    roadOffset:0,
+    starSeed:[],
+    crashFlash:0,
+    pullOver:0,
+    pullOverTarget:0,
+    blinker:0,
+    lastBeat:0
+  };
+
+  function buildEvents(){
+    return [
+      { km:15,  type:'paquete',    done:false },
+      { km:42,  type:'gasolinera', done:false },
+      { km:78,  type:'castanos',   done:false },
+      { km:110, type:'migra',      done:false },
+      { km:145, type:'sleepy',     done:false },
+      { km:175, type:'reten',      done:false }
+    ];
+  }
+
+  function seedStars(){
+    state.starSeed = [];
+    for(var i=0;i<45;i++){
+      state.starSeed.push({
+        x: Math.random(),
+        y: Math.random() * 0.5,
+        r: Math.random() * 1.2 + 0.3,
+        tw: Math.random() * Math.PI * 2
+      });
+    }
+  }
+
+  // industrial skyline: silhouette of a factory belt on the horizon.
+  var SKYLINE = [
+    ['nave', 0.02, 0.13, 0.045],
+    ['chimenea', 0.10, 0.007, 0.16],
+    ['chimenea', 0.115, 0.006, 0.13],
+    ['nave', 0.18, 0.16, 0.055],
+    ['tanque', 0.30, 0.045, 0.055],
+    ['torre', 0.36, 0.010, 0.13],
+    ['nave-tri', 0.42, 0.13, 0.065],
+    ['chimenea', 0.53, 0.008, 0.17],
+    ['chimenea', 0.548, 0.007, 0.145],
+    ['nave', 0.60, 0.12, 0.05],
+    ['tanque', 0.71, 0.05, 0.06],
+    ['torre', 0.79, 0.010, 0.115],
+    ['nave-tri', 0.83, 0.11, 0.055],
+    ['chimenea', 0.94, 0.007, 0.14]
+  ];
+
+  function drawIndustrialSkyline(alpha, scale){
+    var baselineY = H*0.63;
+    var s = 0.4 + scale * 0.6;
+
+    // smoke plumes behind silhouettes
+    ctx.globalAlpha = alpha * 0.18;
+    ctx.fillStyle = '#a8adb8';
+    for(var i=0;i<SKYLINE.length;i++){
+      var st = SKYLINE[i];
+      if(st[0] !== 'chimenea') continue;
+      var sx = st[1] * W;
+      var sw = st[2] * W;
+      var sh = st[3] * H * s;
+      var drift = Math.sin(state.elapsed * 0.3 + i) * 4;
+      ctx.beginPath();
+      ctx.ellipse(sx + sw/2 + drift, baselineY - sh - 8, sw*3.5, 10, 0, 0, Math.PI*2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(sx + sw/2 + drift*1.5, baselineY - sh - 20, sw*4.5, 8, 0, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#050810';
+
+    for(var j=0;j<SKYLINE.length;j++){
+      var st2 = SKYLINE[j];
+      var type = st2[0];
+      var x = st2[1] * W;
+      var w = st2[2] * W;
+      var h = st2[3] * H * s;
+
+      if(type === 'nave'){
+        ctx.fillRect(x, baselineY - h, w, h);
+      } else if(type === 'nave-tri'){
+        ctx.fillRect(x, baselineY - h*0.55, w, h*0.55);
+        ctx.beginPath();
+        ctx.moveTo(x, baselineY - h*0.55);
+        ctx.lineTo(x + w/2, baselineY - h);
+        ctx.lineTo(x + w, baselineY - h*0.55);
+        ctx.closePath();
+        ctx.fill();
+      } else if(type === 'chimenea'){
+        ctx.fillRect(x, baselineY - h, w, h);
+      } else if(type === 'tanque'){
+        ctx.fillRect(x, baselineY - h*0.7, w, h*0.7);
+        ctx.beginPath();
+        ctx.ellipse(x + w/2, baselineY - h*0.7, w/2, h*0.18, 0, Math.PI, 0);
+        ctx.fill();
+      } else if(type === 'torre'){
+        ctx.fillRect(x, baselineY - h, w, h);
+        ctx.strokeStyle = '#050810';
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(x - w*2, baselineY);
+        ctx.lineTo(x + w/2, baselineY - h);
+        ctx.lineTo(x + w*3, baselineY);
+        ctx.stroke();
+      }
+    }
+
+    // aviation warning lights on chimneys and towers
+    var pulse = 0.5 + Math.sin(state.elapsed * 2.4) * 0.5;
+    ctx.globalAlpha = alpha * (0.4 + pulse * 0.55);
+    ctx.fillStyle = '#e24b4a';
+    for(var k=0;k<SKYLINE.length;k++){
+      var st3 = SKYLINE[k];
+      if(st3[0] !== 'chimenea' && st3[0] !== 'torre') continue;
+      var tx = st3[1] * W;
+      var tw = st3[2] * W;
+      var th = st3[3] * H * s;
+      ctx.beginPath();
+      ctx.arc(tx + tw/2, baselineY - th - 1, 1.2, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    // scattered warm window lights along the silhouettes
+    ctx.globalAlpha = alpha * 0.75;
+    ctx.fillStyle = '#e8b23d';
+    for(var m=0;m<14;m++){
+      var lx = (m * 47 + 30) % W;
+      var ly = baselineY - 3 - (m * 7 % 12);
+      ctx.fillRect(lx, ly, 1.2, 1.2);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawScene(dt){
+    // sky
+    var sky = ctx.createLinearGradient(0,0,0,H*0.65);
+    sky.addColorStop(0, '#08090f');
+    sky.addColorStop(0.55, '#131628');
+    sky.addColorStop(1, '#1e1a1e');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0,0,W,H*0.65);
+
+    // moon
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = '#e8dcb5';
+    ctx.beginPath();
+    ctx.arc(W*0.78, H*0.13, 20, 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 0.12;
+    ctx.beginPath();
+    ctx.arc(W*0.78, H*0.13, 32, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+
+    // stars
+    ctx.fillStyle = '#e8e2d4';
+    for(var i=0;i<state.starSeed.length;i++){
+      var s = state.starSeed[i];
+      s.tw += dt * 1.4;
+      var alpha = 0.35 + Math.sin(s.tw) * 0.4;
+      ctx.globalAlpha = Math.max(0.1, alpha);
+      ctx.beginPath();
+      ctx.arc(s.x * W, s.y * H, s.r, 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // rare lightning
+    if(Math.random() < 0.0015){
+      ctx.fillStyle = 'rgba(180,190,220,0.12)';
+      ctx.fillRect(0,0,W,H*0.5);
+    }
+
+    // ---- distant backdrop: mountains crossfade to industrial skyline ----
+    var progress = state.km / state.totalKm;
+
+    // mountain scale grows as we approach, alpha fades after crossing
+    var mScale = 1 + Math.min(0.55, progress) * 2.2;
+    var mAlpha = progress < 0.55 ? 1 : Math.max(0, 1 - (progress - 0.55) * 3.5);
+
+    if(mAlpha > 0.02){
+      ctx.globalAlpha = mAlpha;
+      ctx.fillStyle = '#0d1018';
+      var mBaseline = H*0.52 - (mScale - 1) * 6;
+      ctx.beginPath();
+      ctx.moveTo(0, mBaseline);
+      var mOff = -state.km * 0.4;
+      for(var mx0=0; mx0<=W+20; mx0+=20){
+        var mmx = mx0 + mOff;
+        var peakH = (Math.sin(mmx*0.008) * 22 + Math.sin(mmx*0.023) * 8) * mScale;
+        ctx.lineTo(mx0, mBaseline + peakH);
+      }
+      ctx.lineTo(W, H*0.65);
+      ctx.lineTo(0, H*0.65);
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // industrial skyline emerges after the sierra
+    var cAlpha = progress > 0.5 ? Math.min(1, (progress - 0.5) * 3) : 0;
+    var cScale = progress > 0.5 ? Math.min(1, (progress - 0.5) * 2.4) : 0;
+    if(cAlpha > 0.02){
+      drawIndustrialSkyline(cAlpha, cScale);
+    }
+
+    // horizon line
+    ctx.fillStyle = '#181712';
+    ctx.fillRect(0, H*0.63, W, H*0.02);
+
+    // ground
+    var ground = ctx.createLinearGradient(0, H*0.65, 0, H);
+    ground.addColorStop(0, '#1a1611');
+    ground.addColorStop(1, '#080606');
+    ctx.fillStyle = ground;
+    ctx.fillRect(0, H*0.65, W, H*0.35);
+
+    // road perspective trapezoid — cx shifts left when pulling over
+    var roadTopY = H*0.65;
+    var roadBottomY = H*0.94;
+    var roadTopHalf = W*0.06;
+    var roadBottomHalf = W*0.48;
+    var cx = W*0.5 - state.pullOver * W*0.32;
+
+    ctx.fillStyle = '#1c1a17';
+    ctx.beginPath();
+    ctx.moveTo(cx - roadTopHalf, roadTopY);
+    ctx.lineTo(cx + roadTopHalf, roadTopY);
+    ctx.lineTo(cx + roadBottomHalf, roadBottomY);
+    ctx.lineTo(cx - roadBottomHalf, roadBottomY);
+    ctx.closePath();
+    ctx.fill();
+
+    // road edges
+    ctx.strokeStyle = '#3a352a';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx - roadTopHalf, roadTopY);
+    ctx.lineTo(cx - roadBottomHalf, roadBottomY);
+    ctx.moveTo(cx + roadTopHalf, roadTopY);
+    ctx.lineTo(cx + roadBottomHalf, roadBottomY);
+    ctx.stroke();
+
+    // center dashes with perspective — offset scales strongly with speed
+    state.roadOffset += state.speed * dt * 4.5;
+    var lanes = 10;
+    var CYCLE = 60;
+    for(var i=0;i<lanes;i++){
+      var t = ((i / lanes) + ((state.roadOffset % CYCLE) / CYCLE)) % 1;
+      // ease t for perspective
+      var te = t * t;
+      var y1 = roadTopY + te * (roadBottomY - roadTopY);
+      var y2 = roadTopY + Math.min(1, te + 0.03) * (roadBottomY - roadTopY);
+      var w1 = 1.5 + te * 6;
+      var w2 = 1.5 + Math.min(1, te + 0.03) * 6;
+      ctx.fillStyle = 'rgba(232,178,61,' + (0.35 + te*0.55) + ')';
+      ctx.beginPath();
+      ctx.moveTo(cx - w1/2, y1);
+      ctx.lineTo(cx + w1/2, y1);
+      ctx.lineTo(cx + w2/2, y2);
+      ctx.lineTo(cx - w2/2, y2);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // roadside posts
+    var POST_CYCLE = 80;
+    for(var j=0;j<7;j++){
+      var pt = ((j / 7) + ((state.roadOffset * 1.2 % POST_CYCLE) / POST_CYCLE)) % 1;
+      var pte = pt * pt;
+      var py = roadTopY + pte * (roadBottomY - roadTopY);
+      var pxHalf = roadTopHalf + pte * (roadBottomHalf - roadTopHalf);
+      var ph = 5 + pte * 22;
+      ctx.fillStyle = '#2a2620';
+      ctx.fillRect(cx - pxHalf - 5, py - ph, 2 + pte*1.5, ph);
+      ctx.fillRect(cx + pxHalf + 3, py - ph, 2 + pte*1.5, ph);
+      // reflectors
+      ctx.fillStyle = 'rgba(232,178,61,' + (0.4 + pte*0.5) + ')';
+      ctx.beginPath();
+      ctx.arc(cx - pxHalf - 4, py - ph*0.6, 0.8 + pte*1.2, 0, Math.PI*2);
+      ctx.arc(cx + pxHalf + 4, py - ph*0.6, 0.8 + pte*1.2, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    // car hood
+    ctx.fillStyle = '#050506';
+    ctx.beginPath();
+    ctx.moveTo(0, H*0.94);
+    ctx.quadraticCurveTo(W*0.5, H*0.86, W, H*0.94);
+    ctx.lineTo(W, H);
+    ctx.lineTo(0, H);
+    ctx.closePath();
+    ctx.fill();
+
+    // hood shine
+    ctx.strokeStyle = 'rgba(232,178,61,0.08)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, H*0.94);
+    ctx.quadraticCurveTo(W*0.5, H*0.86, W, H*0.94);
+    ctx.stroke();
+
+    // headlight cones
+    if(state.speed > 5){
+      var beamAlpha = Math.min(0.18, state.speed / 700);
+      var beam = ctx.createLinearGradient(0, roadBottomY, 0, roadTopY);
+      beam.addColorStop(0, 'rgba(255,240,200,' + beamAlpha + ')');
+      beam.addColorStop(1, 'rgba(255,240,200,0)');
+      ctx.fillStyle = beam;
+      ctx.beginPath();
+      ctx.moveTo(cx - roadTopHalf*1.4, roadTopY);
+      ctx.lineTo(cx + roadTopHalf*1.4, roadTopY);
+      ctx.lineTo(cx + roadBottomHalf*1.1, roadBottomY);
+      ctx.lineTo(cx - roadBottomHalf*1.1, roadBottomY);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // reten flash
+    if(state.activeEvent && state.activeEvent.type === 'reten'){
+      var flash = Math.sin(state.elapsed * 8) > 0 ? 'rgba(226,75,74,0.15)' : 'rgba(58,111,201,0.15)';
+      ctx.fillStyle = flash;
+      ctx.fillRect(0, 0, W, H*0.65);
+    }
+    if(state.activeEvent && state.activeEvent.type === 'migra'){
+      if(Math.sin(state.elapsed * 6) > 0){
+        ctx.fillStyle = 'rgba(232,178,61,0.1)';
+        ctx.fillRect(0, 0, W, H*0.65);
+      }
+    }
+
+    // sleepy vignette
+    if(state.urgent){
+      var vig = ctx.createRadialGradient(cx, H*0.5, H*0.15, cx, H*0.5, H*0.65);
+      vig.addColorStop(0, 'rgba(0,0,0,0)');
+      vig.addColorStop(1, 'rgba(80,10,10,0.55)');
+      ctx.fillStyle = vig;
+      ctx.fillRect(0,0,W,H);
+    }
+
+    // turn signal (ambient amber glow at hood edge while pulling over or returning)
+    if(state.pullOver > 0.05){
+      var blinkOn = state.blinker < 0.5;
+      var blinkAlpha = blinkOn ? state.pullOver * 0.65 : state.pullOver * 0.05;
+      ctx.fillStyle = 'rgba(232,178,61,' + blinkAlpha + ')';
+      ctx.beginPath();
+      ctx.arc(W*0.92, H*0.9, 22, 0, Math.PI*2);
+      ctx.fill();
+      if(blinkOn){
+        var glow = ctx.createRadialGradient(W*0.92, H*0.9, 5, W*0.92, H*0.9, 60);
+        glow.addColorStop(0, 'rgba(232,178,61,' + (state.pullOver * 0.35) + ')');
+        glow.addColorStop(1, 'rgba(232,178,61,0)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(W*0.75, H*0.75, W*0.25, H*0.25);
+      }
+    }
+  }
+
+  function renderPax(){
+    var pax = document.getElementById('pax');
+    pax.innerHTML = '';
+    for(var i=0;i<9;i++){
+      var d = document.createElement('div');
+      d.className = 'pax-dot' + (i < state.passengers ? ' on' : '');
+      pax.appendChild(d);
+    }
+  }
+
+  var eventDefs = {
+    paquete: {
+      tag:'llamada · ramos arizpe',
+      text:'Suena el teléfono. Regresen: hay un paquete en el Aurrerá.',
+      stopDuration:3.5
+    },
+    gasolinera: {
+      tag:'gasolinera · salida de monclova',
+      text:'Paran a llenar tanque. En el OXXO suben dos pasajeros más.',
+      stopDuration:5,
+      onEnd:function(){ state.passengers = 5; renderPax(); }
+    },
+    castanos: {
+      tag:'salida de castaños',
+      text:'Sube otro. Ya son ocho adultos y un niño. Los amortiguadores se quejan.',
+      stopDuration:3,
+      onEnd:function(){ state.passengers = 9; renderPax(); }
+    },
+    migra: {
+      tag:'instituto nacional de migración',
+      text:'Una camioneta oficial los rebasa y prende las intermitentes. "Somos pasajeros", dice el chofer.',
+      stopDuration:4
+    },
+    sleepy: {
+      tag:'chofer cabeceando',
+      danger:true,
+      text:'¡El chofer se está durmiendo! Se talla los ojos, la cabeza le tambalea. TAPEA MÁS RÁPIDO.',
+      urgent:true,
+      urgentDuration:6,
+      urgentTapsNeeded:22,
+      onEnd:function(passed){ if(!passed) state.tookRisk = true; }
+    },
+    reten: {
+      tag:'retén · entrada a ramos arizpe',
+      text:'"Pasaje", dice el chofer. "Pásele", le responden.',
+      stopDuration:3
+    }
+  };
+
+  function showEvent(type){
+    var def = eventDefs[type];
+    var card = document.getElementById('event');
+    card.className = 'event-card show' + (def.danger ? ' danger' : '');
+    var html = '<div class="tag">' + def.tag + '</div>' + def.text;
+    if(def.urgent){
+      html += '<div class="urgent-bar"><div class="urgent-bar-fill" id="urgent-fill"></div></div>';
+    }
+    card.innerHTML = html;
+    state.activeEvent = { type:type, def:def, elapsed:0, urgentTaps:0, passed:false };
+    if(def.urgent){
+      state.urgent = true;
+      document.getElementById('tap').classList.add('urgent');
+      audio.urgentStart();
+      showThought('el chofer se está durmiendo');
+    } else {
+      state.stopped = true;
+      state.pullOverTarget = 1;
+      audio.setStopped(true);
+      if(type === 'migra' || type === 'reten'){
+        audio.sirenStart();
+      }
+      // contextual thought per event
+      if(type === 'gasolinera') showThought('el olor a perfume y a tierra');
+      else if(type === 'castanos') showThought('los amortiguadores se quejan');
+      else if(type === 'paquete') showThought('quién carga los paquetes');
+    }
+  }
+
+  function endEvent(){
+    document.getElementById('event').classList.remove('show');
+    if(state.activeEvent){
+      var def = state.activeEvent.def;
+      var type = state.activeEvent.type;
+      if(def.urgent){
+        if(def.onEnd) def.onEnd(state.activeEvent.passed);
+        state.urgent = false;
+        document.getElementById('tap').classList.remove('urgent');
+        audio.urgentEnd();
+      } else {
+        if(def.onEnd) def.onEnd();
+        state.stopped = false;
+        state.pullOverTarget = 0;
+        audio.setStopped(false);
+        if(type === 'migra' || type === 'reten'){
+          audio.sirenEnd();
+        }
+      }
+    }
+    state.activeEvent = null;
+  }
+
+  function onTap(){
+    if(!state.running || state.ended) return;
+    if(state.activeEvent){
+      if(state.activeEvent.def.urgent){
+        state.activeEvent.urgentTaps++;
+        state.speedInternal = Math.min(140, state.speedInternal + 4);
+      } else if(state.stopped){
+        return;
+      }
+    } else {
+      state.speedInternal = Math.min(175, state.speedInternal + 9);
+    }
+    state.tapCount++;
+    audio.tick(state.speed);
+    var btn = document.getElementById('tap');
+    btn.classList.add('pressed');
+    setTimeout(function(){ btn.classList.remove('pressed'); }, 60);
+  }
+
+  var tapBtn = document.getElementById('tap');
+  tapBtn.addEventListener('pointerdown', function(e){ e.preventDefault(); onTap(); });
+  document.addEventListener('keydown', function(e){
+    if(e.code === 'Space' && state.running){ e.preventDefault(); onTap(); }
+  });
+
+  var lastFrame = 0;
+  function loop(now){
+    if(!lastFrame) lastFrame = now;
+    var dt = Math.min(0.05, (now - lastFrame) / 1000);
+    lastFrame = now;
+
+    if(state.running && !state.ended){
+      state.elapsed += dt;
+      state.remaining = Math.max(0, state.remaining - dt);
+
+      if(state.stopped){
+        state.speedInternal = Math.max(0, state.speedInternal - 80*dt);
+        state.activeEvent.elapsed += dt;
+        if(state.activeEvent.elapsed >= state.activeEvent.def.stopDuration){
+          endEvent();
+        }
+      } else if(state.urgent){
+        state.activeEvent.elapsed += dt;
+        state.speedInternal = Math.max(15, state.speedInternal - 18*dt);
+        state.km += (state.speedInternal / 3600) * dt * 30;
+        var fill = document.getElementById('urgent-fill');
+        if(fill){
+          var p = Math.min(1, state.activeEvent.urgentTaps / state.activeEvent.def.urgentTapsNeeded);
+          fill.style.width = (p * 100) + '%';
+          fill.style.background = p >= 1 ? '#7fae6b' : '#e24b4a';
+        }
+        if(state.activeEvent.elapsed >= state.activeEvent.def.urgentDuration){
+          state.activeEvent.passed = state.activeEvent.urgentTaps >= state.activeEvent.def.urgentTapsNeeded;
+          endEvent();
+        }
+      } else {
+        state.speedInternal = Math.max(0, state.speedInternal - 26*dt);
+        state.km += (state.speedInternal / 3600) * dt * 30;
+      }
+
+      state.speed += (state.speedInternal - state.speed) * Math.min(1, dt * 4);
+
+      // smooth pull-over motion
+      state.pullOver += (state.pullOverTarget - state.pullOver) * Math.min(1, dt * 2.2);
+      state.blinker = (state.blinker + dt) % 1;
+
+      // beat scheduler — bpm scales with visible speed
+      if(state.speed > 25 && !state.stopped && !state.crashed){
+        var bpm = 55 + state.speed * 0.75;
+        var interval = 60000 / bpm;
+        var now2 = performance.now();
+        if(now2 - state.lastBeat > interval){
+          audio.beat();
+          state.lastBeat = now2;
+        }
+      }
+
+      // progress cue for drone timbre shift
+      audio.setProgress(state.km / state.totalKm);
+
+      // CRASH: passing 150 km/h
+      if(state.speed >= CRASH_SPEED && !state.crashed){
+        state.crashed = true;
+        state.crashFlash = 1;
+        endGame('crash');
+      }
+
+      // speedometer warning zones
+      var sp = document.querySelector('.speedo');
+      sp.classList.remove('warn','danger');
+      if(state.speed >= 140) sp.classList.add('danger');
+      else if(state.speed >= 125) sp.classList.add('warn');
+
+      // countdown warning zones
+      var cd = document.getElementById('countdown-block');
+      cd.classList.remove('warn','danger');
+      if(state.remaining <= 20) cd.classList.add('danger');
+      else if(state.remaining <= 45) cd.classList.add('warn');
+
+      for(var i=0;i<state.events.length;i++){
+        var ev = state.events[i];
+        if(!ev.done && !state.activeEvent && state.km >= ev.km){
+          ev.done = true;
+          showEvent(ev.type);
+          break;
+        }
+      }
+
+      document.getElementById('km').textContent = Math.floor(state.km);
+      document.getElementById('speed').textContent = Math.round(state.speed);
+      document.getElementById('progress').style.width = Math.min(100, (state.km/state.totalKm)*100) + '%';
+      var mm = Math.floor(state.remaining/60);
+      var ss = Math.floor(state.remaining%60);
+      document.getElementById('time').textContent = (mm<10?'0':'')+mm+':'+(ss<10?'0':'')+ss;
+
+      // OUT OF TIME
+      if(state.remaining <= 0 && !state.ended){
+        state.outOfTime = true;
+        endGame('timeout');
+      }
+
+      if(state.km >= state.totalKm && !state.ended){
+        state.km = state.totalKm;
+        endGame('win');
+      }
+    }
+
+    // crash flash overlay decays
+    if(state.crashFlash > 0){
+      ctx.fillStyle = 'rgba(226,75,74,' + state.crashFlash + ')';
+      ctx.fillRect(0,0,W,H);
+      state.crashFlash = Math.max(0, state.crashFlash - dt * 1.2);
+    }
+
+    drawScene(dt);
+    requestAnimationFrame(loop);
+  }
+
+  function endGame(outcome){
+    if(state.ended) return;
+    state.ended = true;
+    state.running = false;
+    stopThoughts();
+    document.getElementById('thought').classList.remove('show');
+    audio.sirenEnd();
+    audio.urgentEnd();
+    if(outcome === 'crash'){
+      audio.crash();
+    }
+
+    var mm = Math.floor(state.elapsed/60);
+    var ss = Math.floor(state.elapsed%60);
+    var timeStr = (mm<10?'0':'')+mm+':'+(ss<10?'0':'')+ss;
+
+    var title, sub, verdict;
+
+    if(outcome === 'crash'){
+      title = 'Accidente';
+      sub = 'pasaste de 150 km/h';
+      verdict = 'El chofer venía rebasando en raya continua y no vio a tiempo. Los amortiguadores no aguantaron. Nueve personas en un vehículo particular, sin seguro para ninguna. Este es el otro final posible del ride de las 8, el que nadie cuenta después.';
+    } else if(outcome === 'timeout'){
+      title = 'No llegaste';
+      sub = 'se acabó el tiempo';
+      verdict = 'El viaje se hizo eterno entre paradas, paquetes y pasajeros que iban subiendo. Los que esperaban en Saltillo dejaron de esperar. Llegar tarde a veces vale lo mismo que no llegar.';
+    } else if(state.tookRisk){
+      title = 'Bajaste en Saltillo';
+      sub = 'llegaste, con susto';
+      verdict = 'El chofer cabeceó en un tramo largo y el carro se fue más de la cuenta hacia la raya continua. Bajas del vehículo con el pulso todavía acelerado. Llegaste, pero no de la forma en que uno quiere llegar a casa.';
+    } else if(state.elapsed < 100){
+      title = 'Bajaste en Saltillo';
+      sub = 'récord de la ruta';
+      verdict = 'Aventaste al chofer como si fueras parte del volante. Llegaste en tiempo récord al Soriana San Isidro. Bajas mareado, pero entero.';
+    } else if(state.elapsed < 150){
+      title = 'Bajaste en Saltillo';
+      sub = 'llegada de rutina';
+      verdict = 'Un viaje normal, si es que hay algo normal en meter nueve personas en un vehículo particular. Bajas cansado, con la espalda cobrándote factura.';
+    } else {
+      title = 'Bajaste en Saltillo';
+      sub = 'llegada al filo';
+      verdict = 'Llegaste raspando el tiempo. Ese monumento a la nostalgia ochentera que se vuelve un poco tétrico de noche te recibe con las luces encendidas.';
+    }
+
+    var overlay = document.getElementById('overlay');
+    overlay.innerHTML =
+      '<div class="sub">' + sub + '</div>'+
+      '<h1>' + title + '</h1>'+
+      '<div class="body">' + verdict + '</div>'+
+      '<div class="stats">'+
+        'distancia: <b>' + Math.floor(state.km) + ' / 195 km</b><br>'+
+        'tiempo transcurrido: <b>' + timeStr + '</b><br>'+
+        'taps totales: <b>' + state.tapCount + '</b><br>'+
+        'pasajeros a bordo: <b>' + state.passengers + '</b><br>'+
+        'costo del regreso: <b>$300</b> · redondo: <b>$550</b><br>'+
+        '<span style="color:#c9a227">seguridad o economía, no ambas.</span>'+
+      '</div>'+
+      '<button id="restart">Otro viaje</button>';
+    overlay.classList.add('show');
+    document.getElementById('restart').addEventListener('click', resetGame);
+    document.getElementById('tap').classList.add('disabled');
+  }
+
+  function resetGame(){
+    state.running = false;
+    state.ended = false;
+    state.crashed = false;
+    state.outOfTime = false;
+    state.km = 0;
+    state.speed = 0;
+    state.speedInternal = 0;
+    state.elapsed = 0;
+    state.remaining = TIME_LIMIT;
+    state.tapCount = 0;
+    state.passengers = 3;
+    state.events = buildEvents();
+    state.activeEvent = null;
+    state.stopped = false;
+    state.urgent = false;
+    state.tookRisk = false;
+    state.roadOffset = 0;
+    state.crashFlash = 0;
+    state.pullOver = 0;
+    state.pullOverTarget = 0;
+    state.blinker = 0;
+    state.lastBeat = 0;
+    stopThoughts();
+    document.getElementById('thought').classList.remove('show');
+    // restore master gain if crash faded it out
+    if(audio.ready && !audio.muted){
+      audio.master.gain.cancelScheduledValues(audio.ctx.currentTime);
+      audio.master.gain.setValueAtTime(0.35, audio.ctx.currentTime);
+    }
+    audio.urgentEnd();
+    audio.sirenEnd();
+    renderPax();
+    document.getElementById('km').textContent = '0';
+    document.getElementById('speed').textContent = '0';
+    document.getElementById('time').textContent = '03:30';
+    document.getElementById('progress').style.width = '0%';
+    document.getElementById('event').classList.remove('show');
+    document.getElementById('tap').classList.remove('disabled','urgent');
+    document.querySelector('.speedo').classList.remove('warn','danger');
+    document.getElementById('countdown-block').classList.remove('warn','danger');
+
+    var overlay = document.getElementById('overlay');
+    overlay.innerHTML =
+      '<div class="sub">plaza de los bomberos · monclova · 20:10</div>'+
+      '<h1>El ride de las 8</h1>'+
+      '<div class="body">Reservaste el último lugar de la noche desde un grupo de Facebook. La unidad marca 13 al costado. Adentro ya van dos pasajeros.<br><br><b style="color:#e8e2d4;">Tapea rápido</b> para acelerar. Tienes <b style="color:#e8e2d4;">3:30</b> para llegar a Saltillo. Pero cuidado: pasar de <b style="color:#e24b4a;">150 km/h</b> es accidente.</div>'+
+      '<button id="start">Subir a la unidad</button>';
+    overlay.classList.add('show');
+    document.getElementById('start').addEventListener('click', startGame);
+  }
+
+  function startGame(){
+    document.getElementById('overlay').classList.remove('show');
+    document.getElementById('tap').classList.remove('disabled');
+    state.events = buildEvents();
+    state.running = true;
+    audio.init();
+    // resume in case of Safari suspend
+    if(audio.ctx && audio.ctx.state === 'suspended'){ audio.ctx.resume(); }
+    renderPax();
+    scheduleThoughts();
+  }
+
+  resize();
+  seedStars();
+  renderPax();
+  document.getElementById('start').addEventListener('click', startGame);
+
+  var MUTE_ON_ICON = '<svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>';
+  var MUTE_OFF_ICON = '<svg viewBox="0 0 24 24"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.17v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>';
+  var muteBtn = document.getElementById('mute');
+  muteBtn.addEventListener('click', function(){
+    var isMuted = audio.toggleMute();
+    muteBtn.innerHTML = isMuted ? MUTE_OFF_ICON : MUTE_ON_ICON;
+    muteBtn.setAttribute('aria-label', isMuted ? 'Activar audio' : 'Silenciar audio');
+  });
+
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
